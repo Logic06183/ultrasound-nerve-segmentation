@@ -2,3 +2,6 @@
 *.npy
 *.csv
 *.hdf5
+*.h5
+preds/
+__pycache__/

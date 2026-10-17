@@ -1,9 +1,11 @@
 from __future__ import print_function
 
+import argparse
 import os
 from skimage.transform import resize
 from skimage.io import imsave
 import numpy as np
+from keras import ops
 from keras.models import Model
 from keras.layers import Input, concatenate, Conv2D, MaxPooling2D, Conv2DTranspose
 from keras.optimizers import Adam
@@ -21,17 +23,17 @@ smooth = 1.
 
 
 def dice_coef(y_true, y_pred):
-    y_true_f = K.flatten(y_true)
-    y_pred_f = K.flatten(y_pred)
-    intersection = K.sum(y_true_f * y_pred_f)
-    return (2. * intersection + smooth) / (K.sum(y_true_f) + K.sum(y_pred_f) + smooth)
+    y_true_f = ops.reshape(y_true, [-1])
+    y_pred_f = ops.reshape(y_pred, [-1])
+    intersection = ops.sum(y_true_f * y_pred_f)
+    return (2. * intersection + smooth) / (ops.sum(y_true_f) + ops.sum(y_pred_f) + smooth)
 
 
 def dice_coef_loss(y_true, y_pred):
     return -dice_coef(y_true, y_pred)
 
 
-def get_unet():
+def get_unet(learning_rate=1e-5):
     inputs = Input((img_rows, img_cols, 1))
     conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(inputs)
     conv1 = Conv2D(32, (3, 3), activation='relu', padding='same')(conv1)
@@ -72,7 +74,7 @@ def get_unet():
 
     model = Model(inputs=[inputs], outputs=[conv10])
 
-    model.compile(optimizer=Adam(lr=1e-5), loss=dice_coef_loss, metrics=[dice_coef])
+    model.compile(optimizer=Adam(learning_rate=learning_rate), loss=dice_coef_loss, metrics=[dice_coef])
 
     return model
 
@@ -80,13 +82,13 @@ def get_unet():
 def preprocess(imgs):
     imgs_p = np.ndarray((imgs.shape[0], img_rows, img_cols), dtype=np.uint8)
     for i in range(imgs.shape[0]):
-        imgs_p[i] = resize(imgs[i], (img_cols, img_rows), preserve_range=True)
+        imgs_p[i] = resize(imgs[i], (img_rows, img_cols), preserve_range=True)
 
     imgs_p = imgs_p[..., np.newaxis]
     return imgs_p
 
 
-def train_and_predict():
+def train_and_predict(epochs=20, batch_size=32, learning_rate=1e-5, validation_split=0.2):
     print('-'*30)
     print('Loading and preprocessing train data...')
     print('-'*30)
@@ -108,14 +110,15 @@ def train_and_predict():
     print('-'*30)
     print('Creating and compiling model...')
     print('-'*30)
-    model = get_unet()
-    model_checkpoint = ModelCheckpoint('weights.h5', monitor='val_loss', save_best_only=True)
+    model = get_unet(learning_rate)
+    model_checkpoint = ModelCheckpoint('weights.weights.h5', monitor='val_loss', save_best_only=True,
+                                       save_weights_only=True)
 
     print('-'*30)
     print('Fitting model...')
     print('-'*30)
-    model.fit(imgs_train, imgs_mask_train, batch_size=32, nb_epoch=20, verbose=1, shuffle=True,
-              validation_split=0.2,
+    model.fit(imgs_train, imgs_mask_train, batch_size=batch_size, epochs=epochs, verbose=1, shuffle=True,
+              validation_split=validation_split,
               callbacks=[model_checkpoint])
 
     print('-'*30)
@@ -131,7 +134,7 @@ def train_and_predict():
     print('-'*30)
     print('Loading saved weights...')
     print('-'*30)
-    model.load_weights('weights.h5')
+    model.load_weights('weights.weights.h5')
 
     print('-'*30)
     print('Predicting masks on test data...')
@@ -147,7 +150,13 @@ def train_and_predict():
         os.mkdir(pred_dir)
     for image, image_id in zip(imgs_mask_test, imgs_id_test):
         image = (image[:, :, 0] * 255.).astype(np.uint8)
-        imsave(os.path.join(pred_dir, str(image_id) + '_pred.png'), image)
+        imsave(os.path.join(pred_dir, str(image_id) + '_pred.png'), image, check_contrast=False)
 
 if __name__ == '__main__':
-    train_and_predict()
+    parser = argparse.ArgumentParser(description='Train U-Net and predict test masks.')
+    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--batch-size', type=int, default=32)
+    parser.add_argument('--learning-rate', type=float, default=1e-5)
+    parser.add_argument('--validation-split', type=float, default=0.2)
+    args = parser.parse_args()
+    train_and_predict(args.epochs, args.batch_size, args.learning_rate, args.validation_split)

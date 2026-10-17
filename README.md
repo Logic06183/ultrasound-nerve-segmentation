@@ -69,11 +69,18 @@ The weights are updated by Adam optimizer, with a 1e-5 learning rate. During tra
 
 This tutorial depends on the following libraries:
 
+* NumPy
 * scikit-image
-* Tensorflow
-* Keras >= 2.0
+* Keras >= 3.0, with any backend (TensorFlow, JAX or PyTorch)
 
-Also, this code should be compatible with Python versions 2.7-3.5.
+Install them with `pip install -r requirements.txt`, plus the backend of your choice
+(e.g. `pip install tensorflow`). Select the backend with the `KERAS_BACKEND` environment variable.
+The code targets Python 3.10+.
+
+### Tests
+
+`python -m pytest` runs a quick check of data loading, the U-Net shapes, Dice and the submission
+run-length encoding on synthetic images (no Kaggle data needed). Tests use the JAX backend by default.
 
 ### Prepare the data
 
@@ -109,7 +116,10 @@ Running this script will create train and test images and save them to **.npy** 
 
 * Run ```python train.py``` to train the model.
 
-Check out ```train_predict()``` to modify the number of iterations (epochs), batch size, etc.
+Epochs, batch size, learning rate and validation split can be set on the command line, e.g.
+```python train.py --epochs 30 --batch-size 16 --learning-rate 1e-4```. See ```python train.py --help```.
+The best weights (by validation loss) are saved to ```weights.weights.h5```, and predicted masks are also
+written as PNGs to ```preds/```.
 
 After this script finishes, in ```imgs_mask_test.npy``` masks for corresponding images in ```imgs_test.npy```
 should be generated. I suggest you examine these masks for getting further insight of your model's performance.
@@ -123,7 +133,7 @@ Check out function ```submission()``` and ```run_length_enc()``` (thanks woshial
 
 ## About Keras
 
-Keras is a minimalist, highly modular neural networks library, written in Python and capable of running on top of either TensorFlow or Theano. It was developed with a focus on enabling fast experimentation. Being able to go from idea to result with the least possible delay is key to doing good research.
+Keras is a minimalist, highly modular neural networks library, written in Python and capable of running on top of TensorFlow, JAX or PyTorch. It was developed with a focus on enabling fast experimentation. Being able to go from idea to result with the least possible delay is key to doing good research.
 
 Use Keras if you need a deep learning library that:
 
@@ -132,5 +142,3 @@ supports both convolutional networks and recurrent networks, as well as combinat
 supports arbitrary connectivity schemes (including multi-input and multi-output training).
 runs seamlessly on CPU and GPU.
 Read the documentation [Keras.io](http://keras.io/)
-
-Keras is compatible with: Python 2.7-3.5.

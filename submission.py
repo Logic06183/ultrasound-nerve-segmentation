@@ -7,8 +7,8 @@ from data import image_cols, image_rows
 
 def prep(img):
     img = img.astype('float32')
-    img = (img > 0.5).astype(np.uint8)  # threshold
-    img = resize(img, (image_cols, image_rows), preserve_range=True)
+    img = resize(img, (image_rows, image_cols), preserve_range=True)
+    img = (img > 0.5).astype(np.uint8)  # threshold after resizing so the mask stays binary
     return img
 
 
@@ -40,7 +40,7 @@ def submission():
     ids = []
     rles = []
     for i in range(total):
-        img = imgs_test[i, 0]
+        img = imgs_test[i, :, :, 0]
         img = prep(img)
         rle = run_length_enc(img)
 

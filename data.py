@@ -13,8 +13,8 @@ image_cols = 580
 
 def create_train_data():
     train_data_path = os.path.join(data_path, 'train')
-    images = os.listdir(train_data_path)
-    total = len(images) / 2
+    images = sorted(os.listdir(train_data_path))
+    total = len(images) // 2
 
     imgs = np.ndarray((total, image_rows, image_cols), dtype=np.uint8)
     imgs_mask = np.ndarray((total, image_rows, image_cols), dtype=np.uint8)
@@ -27,8 +27,8 @@ def create_train_data():
         if 'mask' in image_name:
             continue
         image_mask_name = image_name.split('.')[0] + '_mask.tif'
-        img = imread(os.path.join(train_data_path, image_name), as_grey=True)
-        img_mask = imread(os.path.join(train_data_path, image_mask_name), as_grey=True)
+        img = imread(os.path.join(train_data_path, image_name), as_gray=True)
+        img_mask = imread(os.path.join(train_data_path, image_mask_name), as_gray=True)
 
         img = np.array([img])
         img_mask = np.array([img_mask])
@@ -54,7 +54,7 @@ def load_train_data():
 
 def create_test_data():
     train_data_path = os.path.join(data_path, 'test')
-    images = os.listdir(train_data_path)
+    images = sorted(os.listdir(train_data_path))
     total = len(images)
 
     imgs = np.ndarray((total, image_rows, image_cols), dtype=np.uint8)
@@ -66,7 +66,7 @@ def create_test_data():
     print('-'*30)
     for image_name in images:
         img_id = int(image_name.split('.')[0])
-        img = imread(os.path.join(train_data_path, image_name), as_grey=True)
+        img = imread(os.path.join(train_data_path, image_name), as_gray=True)
 
         img = np.array([img])
 
