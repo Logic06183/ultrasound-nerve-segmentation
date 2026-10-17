@@ -78,3 +78,28 @@ def test_unet_shapes_and_dice():
     y = np.ones((4, 4), dtype=np.float32)
     assert float(train.dice_coef(y, y)) == pytest.approx(1.0)
     assert float(train.dice_coef_loss(y, y)) == pytest.approx(-1.0)
+
+
+def test_train_predict_and_submit_end_to_end(tmp_path, monkeypatch):
+    pytest.importorskip('keras')
+    import train
+    import submission
+
+    rng = np.random.default_rng(0)
+    shape = (data.image_rows, data.image_cols)
+    masks = np.zeros((5,) + shape, dtype=np.uint8)
+    masks[:, 150:250, 200:350] = 255
+    monkeypatch.chdir(tmp_path)
+    np.save('imgs_train.npy', rng.integers(0, 256, (5,) + shape, dtype=np.uint8))
+    np.save('imgs_mask_train.npy', masks)
+    np.save('imgs_test.npy', rng.integers(0, 256, (3,) + shape, dtype=np.uint8))
+    np.save('imgs_id_test.npy', np.array([3, 1, 2], dtype=np.int32))
+
+    train.train_and_predict(epochs=1, batch_size=2)
+    assert np.load('imgs_mask_test.npy').shape == (3, train.img_rows, train.img_cols, 1)
+    assert sorted(os.listdir('preds')) == ['1_pred.png', '2_pred.png', '3_pred.png']
+
+    submission.submission()
+    lines = open('submission.csv').read().splitlines()
+    assert lines[0] == 'img,pixels'
+    assert [line.split(',')[0] for line in lines[1:]] == ['1', '2', '3']

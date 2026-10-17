@@ -75,7 +75,7 @@ This tutorial depends on the following libraries:
 
 Install them with `pip install -r requirements.txt`, plus the backend of your choice
 (e.g. `pip install tensorflow`). Select the backend with the `KERAS_BACKEND` environment variable.
-The code targets Python 3.9+.
+The code targets Python 3.10+.
 
 ### Tests
 
