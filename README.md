@@ -69,11 +69,18 @@ The weights are updated by Adam optimizer, with a 1e-5 learning rate. During tra
 
 This tutorial depends on the following libraries:
 
+* NumPy
 * scikit-image
-* Tensorflow
-* Keras >= 2.0
+* Keras >= 3.0, with any backend (TensorFlow, JAX or PyTorch)
 
-Also, this code should be compatible with Python versions 2.7-3.5.
+Install them with `pip install -r requirements.txt`, plus the backend of your choice
+(e.g. `pip install tensorflow`). Select the backend with the `KERAS_BACKEND` environment variable.
+The code targets Python 3.9+.
+
+### Tests
+
+`python -m pytest` runs a quick check of data loading, the U-Net shapes, Dice and the submission
+run-length encoding on synthetic images (no Kaggle data needed). Tests use the JAX backend by default.
 
 ### Prepare the data
 
