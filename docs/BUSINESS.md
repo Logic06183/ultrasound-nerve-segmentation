@@ -40,12 +40,14 @@ openings look more realistic, roughly in order of how fast they could earn money
    anaesthesia expertise is thin. That is the strongest impact case, and it fits a Wits/South Africa
    base, but it needs the full regulated path (SAHPRA here, plus CE or FDA) and local clinical data.
 
-## Update: external validation failed
+## Update: two sites
 
-On 955 frames from 88 patients at another site and scanner, the frozen model detected the nerve in
-none of them (`docs/MODEL_CARD.md`). This model is tied to one scanner. Multi-site training data is
-now the critical path for every business option above, including the teaching tool, since trainees
-will use their own machines.
+The single-site model failed on a second hospital's scanner, detecting 0 of 897 nerve frames.
+Retrained on both sites, it finds the nerve in 86% of nerve frames at held-out site-B patients and
+is unchanged at site A (`docs/MODEL_CARD.md`). So adding a site's data fixed that site. Nothing yet
+shows it will work on a third machine, and no untouched site is left to test that. For a teaching
+product, plan for a short data-collection step at each new customer's scanner until a multi-site
+dataset proves otherwise.
 
 ## What stands between this prototype and any clinical product
 
