@@ -16,3 +16,4 @@ app/samples/
 app/model.part*.bin
 results/test_pred_ensemble.npz
 analysis/contradictory_pairs.png
+downloads_ext/
