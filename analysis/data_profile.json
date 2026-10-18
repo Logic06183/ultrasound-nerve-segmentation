@@ -1,0 +1,41 @@
+{
+ "n_images": 5635,
+ "n_patients": 47,
+ "images_per_patient_min_median_max": [
+  119,
+  120.0,
+  120
+ ],
+ "positive_rate_overall": 0.4122448979591837,
+ "positive_rate_by_patient_min_max": [
+  0.016666666666666666,
+  0.8916666666666667
+ ],
+ "mask_area_px_full_res_median_iqr": [
+  6976.0,
+  5806.0,
+  8120.0
+ ],
+ "near_duplicates": {
+  "0.15": {
+   "pairs": 3425,
+   "contradictory_pairs": 833,
+   "images_in_contradictory_pairs": 870
+  },
+  "0.2": {
+   "pairs": 5425,
+   "contradictory_pairs": 1462,
+   "images_in_contradictory_pairs": 1224
+  },
+  "0.25": {
+   "pairs": 7580,
+   "contradictory_pairs": 2125,
+   "images_in_contradictory_pairs": 1515
+  },
+  "0.3": {
+   "pairs": 9779,
+   "contradictory_pairs": 2743,
+   "images_in_contradictory_pairs": 1818
+  }
+ }
+}

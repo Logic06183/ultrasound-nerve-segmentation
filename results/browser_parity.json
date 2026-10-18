@@ -1,0 +1,8 @@
+{
+ "max_abs_presence_diff": 0.0,
+ "decision_agreement": 1.0,
+ "kaggle_dice_training_resize": 0.7346731978797258,
+ "kaggle_dice_browser": 0.7346731978797258,
+ "sensitivity_training_resize": 0.5325443786982249,
+ "sensitivity_browser": 0.5325443786982249
+}

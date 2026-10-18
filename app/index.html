@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Plexus Finder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: an ultrasound console. Large frame viewport on the left, a readout column on the right,
+   validated performance underneath. Amber = model's nerve region, teal = human annotator. */
+:root {
+  --bg: #eceff2;
+  --surface: #ffffff;
+  --sunken: #e2e7ec;
+  --ink: #15202a;
+  --muted: #586877;
+  --line: #d3dae1;
+  --accent: #c97a0f;
+  --accent-ink: #8a5300;
+  --accent-soft: #f6e6cc;
+  --gt: #1f8aa3;
+  --ok: #2f7d4f;
+  --warn: #a8641a;
+  --stage: #0c1116;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e141a; --surface: #151d25; --sunken: #1b252f; --ink: #e4ebf1; --muted: #93a3b2;
+    --line: #26323d; --accent: #f0a640; --accent-ink: #f6c27a; --accent-soft: #3a2a12;
+    --gt: #52c3dc; --ok: #6cc28f; --warn: #e6a35a; --stage: #06090c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e141a; --surface: #151d25; --sunken: #1b252f; --ink: #e4ebf1; --muted: #93a3b2;
+  --line: #26323d; --accent: #f0a640; --accent-ink: #f6c27a; --accent-soft: #3a2a12;
+  --gt: #52c3dc; --ok: #6cc28f; --warn: #e6a35a; --stage: #06090c; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; }
+h1 { font: 600 28px/1.1 var(--font-display); letter-spacing: 0.01em; margin: 0; text-wrap: balance; }
+h1 small { font: 500 15px var(--font-body); color: var(--muted); letter-spacing: 0; margin-left: 10px; }
+@media (max-width: 560px) { h1 small { display: block; margin: 6px 0 0; } }
+.ruo {
+  font: 500 12px var(--font-data); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--accent-ink); background: var(--accent-soft); padding: 4px 10px; border-radius: 3px;
+}
+.console { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+@media (max-width: 860px) { .console { grid-template-columns: minmax(0, 1fr); } }
+
+.stage { background: var(--stage); border-radius: 6px; padding: 12px; display: grid; gap: 10px; min-width: 0; }
+.frame { position: relative; width: 100%; aspect-ratio: 580 / 420; max-width: 100%; }
+.frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.frame .hint {
+  position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+  color: #9fb0bf; font: 14px var(--font-body); padding: 20px; border: 1px dashed #33414e; border-radius: 4px;
+}
+.frame.drag .hint { border-color: var(--accent); color: #f0a640; }
+.corner {
+  position: absolute; font: 12px/1.4 var(--font-data); color: #c9d6e1; pointer-events: none;
+  text-shadow: 0 1px 2px #000;
+}
+.corner.tl { top: 8px; left: 10px; } .corner.tr { top: 8px; right: 10px; text-align: right; }
+.stage-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; color: #c9d6e1; font-size: 13px; }
+.stage-bar label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.stage-bar input[type=checkbox] { accent-color: #f0a640; }
+.legend { display: inline-flex; gap: 6px; align-items: center; }
+.sw { width: 14px; height: 4px; border-radius: 2px; display: inline-block; }
+.sw.model { background: #f0a640; } .sw.gt { background: repeating-linear-gradient(90deg, #52c3dc 0 4px, transparent 4px 7px); }
+.spacer { flex: 1; }
+.btn {
+  font: 500 13px var(--font-body); border: 1px solid #3a4856; background: #18222c; color: #e4ebf1;
+  padding: 6px 12px; border-radius: 4px; cursor: pointer;
+}
+.btn:hover { border-color: #f0a640; }
+.btn:focus-visible, .thumb:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.readout { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 16px; min-width: 0; }
+.eyebrow { font: 500 11px var(--font-data); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.verdict { display: grid; gap: 4px; }
+.verdict .state { font: 600 24px/1.15 var(--font-display); }
+.verdict .state.found { color: var(--accent-ink); }
+.verdict .state.none { color: var(--ink); }
+.verdict .state.idle { color: var(--muted); }
+.verdict .note { color: var(--muted); font-size: 13px; }
+.chip { display: inline-block; font: 500 11px var(--font-data); letter-spacing: 0.04em; padding: 2px 7px; border-radius: 3px; background: var(--sunken); color: var(--warn); margin-top: 4px; justify-self: start; }
+.meter { display: grid; gap: 6px; }
+.track { position: relative; height: 10px; background: var(--sunken); border-radius: 5px; }
+.fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent); border-radius: 5px; width: 0; transition: width .25s ease; }
+.tick { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--ink); }
+.meter-row { display: flex; justify-content: space-between; font: 12px var(--font-data); color: var(--muted); font-variant-numeric: tabular-nums; }
+dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; }
+dt { color: var(--muted); } dd { margin: 0; text-align: right; font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.gt-row { border-top: 1px solid var(--line); padding-top: 12px; }
+
+.samples { display: grid; gap: 10px; }
+.thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 10px; }
+.thumb { border: 1px solid var(--line); background: var(--surface); border-radius: 4px; padding: 4px; cursor: pointer; display: grid; gap: 4px; text-align: left; color: var(--ink); font: 12px var(--font-data); }
+.thumb img { width: 100%; aspect-ratio: 580/420; object-fit: cover; border-radius: 2px; display: block; }
+.thumb[aria-pressed=true] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.thumb span { color: var(--muted); }
+
+.evidence { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 20px; display: grid; gap: 16px; }
+.evidence h2 { font: 600 20px var(--font-display); margin: 0; }
+.evidence p { margin: 0; max-width: 68ch; color: var(--muted); }
+.table-scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; min-width: 560px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+th { font: 500 11px var(--font-data); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+td.ci { color: var(--muted); font-family: var(--font-data); font-size: 12px; }
+.uses { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.uses h3 { font: 600 14px var(--font-display); margin: 0 0 6px; letter-spacing: 0.02em; }
+.uses ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; display: grid; gap: 4px; }
+.err { color: var(--warn); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .fill { transition: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Plexus Finder <small>Brachial plexus localisation on ultrasound</small></h1>
+    <span class="ruo">Research use only · not a medical device</span>
+  </header>
+
+  <section class="console">
+    <div class="stage">
+      <div class="frame" id="frame">
+        <canvas id="base" width="580" height="420"></canvas>
+        <canvas id="overlay" width="580" height="420"></canvas>
+        <div class="hint" id="hint">Drop an ultrasound frame here, or pick a sample below.<br>PNG or JPEG. Images stay on this device.</div>
+        <div class="corner tl" id="cornerL"></div>
+        <div class="corner tr" id="cornerR"></div>
+      </div>
+      <div class="stage-bar">
+        <span class="legend"><i class="sw model"></i>Model</span>
+        <label id="gtToggleWrap" hidden><input type="checkbox" id="gtToggle" checked> <i class="sw gt"></i>Annotator</label>
+        <label><input type="checkbox" id="heatToggle"> Probability map</label>
+        <span class="spacer"></span>
+        <input type="file" id="file" accept="image/png,image/jpeg,image/bmp,image/webp" hidden>
+        <button class="btn" id="pick" type="button">Open image</button>
+      </div>
+    </div>
+
+    <aside class="readout" aria-live="polite">
+      <div class="verdict">
+        <span class="eyebrow">Result</span>
+        <span class="state idle" id="state">Loading model…</span>
+        <span class="note" id="note">The model runs in this browser. Nothing is uploaded.</span>
+        <span class="chip" id="borderline" hidden>Borderline: close to the decision threshold</span>
+      </div>
+      <div class="meter">
+        <span class="eyebrow">Nerve-present probability</span>
+        <div class="track"><div class="fill" id="fill"></div><div class="tick" id="tick" title="Decision threshold"></div></div>
+        <div class="meter-row"><span id="prob">–</span><span id="thr">threshold –</span></div>
+      </div>
+      <dl>
+        <dt>Region area</dt><dd id="area">–</dd>
+        <dt>Region centre</dt><dd id="centre">–</dd>
+        <dt>Inference</dt><dd id="time">–</dd>
+      </dl>
+      <dl class="gt-row" id="gtStats" hidden>
+        <dt>Annotator label</dt><dd id="gtLabel">–</dd>
+        <dt>Overlap (Dice)</dt><dd id="gtDice">–</dd>
+      </dl>
+      <div class="err" id="err" hidden></div>
+    </aside>
+  </section>
+
+  <section class="samples">
+    <span class="eyebrow">Samples from held-out test patients: the model never saw these patients during training or tuning</span>
+    <div class="thumbs" id="thumbs"></div>
+  </section>
+
+  <section class="evidence">
+    <h2>How well it works</h2>
+    <p id="evidenceIntro">Loading validation results…</p>
+    <div class="table-scroll"><table id="metricsTable"></table></div>
+    <div class="uses">
+      <div>
+        <h3>Intended research use</h3>
+        <ul>
+          <li>Highlight the brachial plexus on a single interscalene ultrasound frame.</li>
+          <li>Teaching sonoanatomy and benchmarking annotation.</li>
+          <li>Frames similar to the training data: 580×420 px greyscale, same scanner family.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Known limits</h3>
+        <ul id="limits">
+          <li>Trained on 47 patients from one public dataset with one annotator and noisy labels.</li>
+          <li>Not tested on other scanners, sites, block approaches or children.</li>
+          <li>Single frames only. No needle tracking, no live video.</li>
+          <li>Never use it to guide a real needle or a clinical decision.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="vendor/ort.wasm.min.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const base = $('base'), overlay = $('overlay');
+  const bctx = base.getContext('2d'), octx = overlay.getContext('2d');
+  let cfg, session, current = null;   // current: {img, w, h, gray, prob, mask, presence, gt, sample}
+
+  const pct = (v, d = 1) => (100 * v).toFixed(d) + '%';
+  function fail(msg) { $('err').textContent = msg; $('err').hidden = false; }
+
+  async function boot() {
+    try {
+      cfg = await (await fetch('config.json')).json();
+      const parts = await Promise.all(cfg.model_parts.map(p => fetch(p).then(r => {
+        if (!r.ok) throw new Error('Could not load ' + p); return r.arrayBuffer(); })));
+      const total = parts.reduce((s, b) => s + b.byteLength, 0);
+      const bytes = new Uint8Array(total); let o = 0;
+      for (const b of parts) { bytes.set(new Uint8Array(b), o); o += b.byteLength; }
+      ort.env.wasm.wasmPaths = new URL('vendor/', location.href).href;
+      ort.env.wasm.numThreads = 1;
+      session = await ort.InferenceSession.create(bytes, { executionProviders: ['wasm'] });
+      $('tick').style.left = pct(cfg.decision_rule.t_cls, 2);
+      $('thr').textContent = 'threshold ' + cfg.decision_rule.t_cls.toFixed(2);
+      renderEvidence(); renderSamples();
+      setIdle('Ready', 'Pick a sample or open your own frame.');
+      if (cfg.samples.length) loadSample(cfg.samples.find(s => s.labelled_nerve) || cfg.samples[0]);
+    } catch (e) { setIdle('Model failed to load', ''); fail(e.message || String(e)); }
+  }
+
+  function setIdle(state, note) { const s = $('state'); s.className = 'state idle'; s.textContent = state; $('note').textContent = note; }
+
+  function renderSamples() {
+    const box = $('thumbs');
+    for (const s of cfg.samples) {
+      const b = document.createElement('button');
+      b.className = 'thumb'; b.type = 'button'; b.setAttribute('aria-pressed', 'false'); b.dataset.id = s.id;
+      b.innerHTML = `<img alt="" src="samples/${s.id}.png" loading="lazy"><b>Patient ${s.patient}</b><span>frame ${s.frame} · ${s.labelled_nerve ? 'nerve labelled' : 'no nerve labelled'}</span>`;
+      b.addEventListener('click', () => loadSample(s));
+      box.appendChild(b);
+    }
+  }
+
+  function loadImage(src) {
+    return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im);
+      im.onerror = () => rej(new Error('This file could not be read as an image. Use PNG or JPEG.')); im.src = src; });
+  }
+
+  async function loadSample(s) {
+    document.querySelectorAll('.thumb').forEach(t => t.setAttribute('aria-pressed', String(t.dataset.id === s.id)));
+    const [im, gm] = await Promise.all([loadImage(`samples/${s.id}.png`), loadImage(`samples/${s.id}_mask.png`)]);
+    const gt = toGray(gm, gm.naturalWidth, gm.naturalHeight).map(v => v > 127 ? 1 : 0);
+    await analyse(im, { gt, sample: s });
+  }
+
+  async function loadFile(file) {
+    $('err').hidden = true;
+    if (!file) return;
+    if (/\.tiff?$/i.test(file.name)) { fail('TIFF files are not supported by browsers. Export the frame as PNG.'); return; }
+    const url = URL.createObjectURL(file);
+    try {
+      document.querySelectorAll('.thumb').forEach(t => t.setAttribute('aria-pressed', 'false'));
+      await analyse(await loadImage(url), { gt: null, sample: null, name: file.name });
+    } catch (e) { fail(e.message); } finally { URL.revokeObjectURL(url); }
+  }
+
+  function toGray(src, w, h) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(src, 0, 0, w, h);
+    const d = x.getImageData(0, 0, w, h).data, g = new Uint8ClampedArray(w * h);
+    for (let i = 0; i < w * h; i++) g[i] = 0.299 * d[4 * i] + 0.587 * d[4 * i + 1] + 0.114 * d[4 * i + 2];
+    return g;
+  }
+
+  // area-average downscale of a greyscale image to the model grid (matches anti-aliased resize)
+  function downscale(g, w, h, W, H) {
+    const out = new Float32Array(W * H), sx = w / W, sy = h / H;
+    for (let Y = 0; Y < H; Y++) {
+      const y0 = Y * sy, y1 = y0 + sy;
+      for (let X = 0; X < W; X++) {
+        const x0 = X * sx, x1 = x0 + sx; let acc = 0, wt = 0;
+        for (let y = Math.floor(y0); y < Math.ceil(y1); y++) {
+          const fy = Math.min(y + 1, y1) - Math.max(y, y0);
+          for (let x = Math.floor(x0); x < Math.ceil(x1); x++) {
+            const f = fy * (Math.min(x + 1, x1) - Math.max(x, x0)); acc += f * g[y * w + x]; wt += f;
+          }
+        }
+        out[Y * W + X] = Math.round(acc / wt);  // training cache stores whole grey levels
+      }
+    }
+    return out;
+  }
+
+  // bilinear upsample with half-pixel centres (same convention as torch align_corners=False)
+  function upsample(p, W, H, w, h) {
+    const out = new Float32Array(w * h), sx = W / w, sy = H / h;
+    for (let y = 0; y < h; y++) {
+      const fy = Math.max(0, (y + 0.5) * sy - 0.5), y0 = Math.min(H - 1, Math.floor(fy)), y1 = Math.min(H - 1, y0 + 1), ty = fy - y0;
+      for (let x = 0; x < w; x++) {
+        const fx = Math.max(0, (x + 0.5) * sx - 0.5), x0 = Math.min(W - 1, Math.floor(fx)), x1 = Math.min(W - 1, x0 + 1), tx = fx - x0;
+        out[y * w + x] = (p[y0 * W + x0] * (1 - tx) + p[y0 * W + x1] * tx) * (1 - ty) + (p[y1 * W + x0] * (1 - tx) + p[y1 * W + x1] * tx) * ty;
+      }
+    }
+    return out;
+  }
+
+  // largest 4-connected component of prob >= 0.5, matching scipy.ndimage.label's default in evaluate.py
+  function largestComponent(p, w, h) {
+    const lab = new Int32Array(w * h), stack = new Int32Array(w * h); let best = 0, bestN = 0, cur = 0;
+    for (let i = 0; i < w * h; i++) {
+      if (p[i] < 0.5 || lab[i]) continue;
+      cur++; let n = 0, sp = 0; stack[sp++] = i; lab[i] = cur;
+      while (sp) {
+        const j = stack[--sp]; n++; const x = j % w, y = (j - x) / w;
+        if (x > 0 && !lab[j - 1] && p[j - 1] >= 0.5) { lab[j - 1] = cur; stack[sp++] = j - 1; }
+        if (x < w - 1 && !lab[j + 1] && p[j + 1] >= 0.5) { lab[j + 1] = cur; stack[sp++] = j + 1; }
+        if (y > 0 && !lab[j - w] && p[j - w] >= 0.5) { lab[j - w] = cur; stack[sp++] = j - w; }
+        if (y < h - 1 && !lab[j + w] && p[j + w] >= 0.5) { lab[j + w] = cur; stack[sp++] = j + w; }
+      }
+      if (n > bestN) { bestN = n; best = cur; }
+    }
+    const m = new Uint8Array(w * h); if (best) for (let i = 0; i < w * h; i++) m[i] = lab[i] === best ? 1 : 0;
+    return { mask: m, area: bestN };
+  }
+
+  async function analyse(im, extra) {
+    if (!session) return;
+    const w = im.naturalWidth, h = im.naturalHeight, W = cfg.input.width, H = cfg.input.height;
+    const gray = toGray(im, w, h);
+    const t0 = performance.now();
+    const input = new ort.Tensor('float32', downscale(gray, w, h, W, H), [1, 1, H, W]);
+    const out = await session.run({ image: input });
+    const ms = performance.now() - t0;
+    const presence = out.presence.data[0];
+    const prob = upsample(out.mask.data, W, H, w, h);
+    const { mask, area } = largestComponent(prob, w, h);
+    const scale = (w * h) / (cfg.original.width * cfg.original.height);
+    const found = presence >= cfg.decision_rule.t_cls && area >= cfg.decision_rule.min_area_px_full_res * scale && area > 0;
+    current = { im, w, h, prob, mask: found ? mask : new Uint8Array(w * h), presence, found, area, ms, ...extra };
+    draw(); readout();
+  }
+
+  function draw() {
+    const { im, w, h, prob, mask, gt } = current;
+    for (const c of [base, overlay]) { c.width = w; c.height = h; }
+    $('frame').style.aspectRatio = `${w} / ${h}`;
+    $('hint').hidden = true;
+    bctx.drawImage(im, 0, 0, w, h);
+    const img = octx.createImageData(w, h), d = img.data, heat = $('heatToggle').checked;
+    const showGt = gt && $('gtToggle').checked;
+    // edge = inside the region with any pixel within 2 px (4-neighbourhood) outside it
+    const edgeOf = (m, x, y, i) => {
+      for (const r of [1, 2]) {
+        if (x < r || y < r || x >= w - r || y >= h - r) return true;
+        if (!m[i - r] || !m[i + r] || !m[i - r * w] || !m[i + r * w]) return true;
+      }
+      return false;
+    };
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = y * w + x, k = 4 * i;
+      if (heat && prob[i] > 0.05) { d[k] = 240; d[k + 1] = 166 - 80 * prob[i]; d[k + 2] = 64; d[k + 3] = 200 * prob[i]; }
+      if (mask[i]) {
+        if (edgeOf(mask, x, y, i)) { d[k] = 240; d[k + 1] = 166; d[k + 2] = 64; d[k + 3] = 255; }
+        else if (!heat) { d[k] = 240; d[k + 1] = 166; d[k + 2] = 64; d[k + 3] = 60; }
+      }
+      if (showGt && gt[i] && edgeOf(gt, x, y, i) && ((x + y) % 10 < 6)) {
+        d[k] = 82; d[k + 1] = 195; d[k + 2] = 220; d[k + 3] = 255;
+      }
+    }
+    octx.putImageData(img, 0, 0);
+    const s = current.sample;
+    $('cornerL').textContent = s ? `PATIENT ${s.patient} · FRAME ${s.frame}` : (current.name || 'Your image');
+    $('cornerR').textContent = `${w}×${h} px`;
+  }
+
+  function readout() {
+    const c = current, r = cfg.decision_rule, st = $('state');
+    st.className = 'state ' + (c.found ? 'found' : 'none');
+    st.textContent = c.found ? 'Brachial plexus located' : 'No plexus found';
+    $('note').textContent = c.found ? 'Amber outline marks the predicted nerve region.'
+      : 'The model does not see the plexus in this frame.';
+    $('borderline').hidden = Math.abs(c.presence - r.t_cls) > 0.1;
+    $('fill').style.width = pct(c.presence, 2);
+    $('prob').textContent = pct(c.presence);
+    if (c.found) {
+      let sx = 0, sy = 0, n = 0;
+      for (let i = 0; i < c.mask.length; i++) if (c.mask[i]) { sx += i % c.w; sy += Math.floor(i / c.w); n++; }
+      $('area').textContent = `${n.toLocaleString()} px`; $('centre').textContent = `x ${Math.round(sx / n)}, y ${Math.round(sy / n)}`;
+    } else { $('area').textContent = '–'; $('centre').textContent = '–'; }
+    $('time').textContent = `${Math.round(c.ms)} ms, on device`;
+    $('gtToggleWrap').hidden = !c.gt; $('gtStats').hidden = !c.gt;
+    if (c.gt) {
+      let inter = 0, ps = 0, ts = 0;
+      for (let i = 0; i < c.mask.length; i++) { inter += c.mask[i] & c.gt[i]; ps += c.mask[i]; ts += c.gt[i]; }
+      $('gtLabel').textContent = ts ? 'nerve' : 'no nerve';
+      $('gtDice').textContent = ps + ts === 0 ? '1.00 (both empty)' : (2 * inter / (ps + ts)).toFixed(2);
+    }
+  }
+
+  function renderEvidence() {
+    const v = cfg.validation.test_single_fold0, vc = cfg.validation.test_single_fold0_consistent_labels_only;
+    $('evidenceIntro').textContent = `This exact model was scored once on ${cfg.n_test_images.toLocaleString()} frames from ` +
+      `${cfg.test_patients.length} patients held out from all training and tuning. Ranges are 95% confidence intervals from ` +
+      `resampling patients. The right-hand columns drop frames whose label contradicts a near-identical frame from the same patient.`;
+    const rows = [
+      ['Sensitivity: plexus present, model finds it', 'sensitivity'],
+      ['Specificity: plexus absent, model stays quiet', 'specificity'],
+      ['Positive predictive value', 'ppv'],
+      ['AUROC for presence', 'auroc_presence'],
+      ['Dice overlap when correctly detected', 'dice_true_detections'],
+      ['Kaggle score (mean Dice, all frames)', 'kaggle_mean_dice'],
+    ];
+    const f = m => m ? m.estimate.toFixed(2) : '–', ci = m => m ? `${m.ci95[0].toFixed(2)}–${m.ci95[1].toFixed(2)}` : '';
+    $('metricsTable').innerHTML = '<thead><tr><th>Measure</th><th>All test frames</th><th>95% CI</th><th>Consistent labels</th><th>95% CI</th></tr></thead><tbody>' +
+      rows.map(([n, k]) => `<tr><td>${n}</td><td>${f(v[k])}</td><td class="ci">${ci(v[k])}</td><td>${f(vc[k])}</td><td class="ci">${ci(vc[k])}</td></tr>`).join('') +
+      `<tr><td>Kaggle score of always answering "no nerve"</td><td>${cfg.baseline_always_empty.toFixed(2)}</td><td class="ci"></td><td></td><td></td></tr></tbody>`;
+  }
+
+  const frame = $('frame');
+  $('pick').addEventListener('click', () => $('file').click());
+  $('file').addEventListener('change', e => loadFile(e.target.files[0]));
+  frame.addEventListener('dragover', e => { e.preventDefault(); frame.classList.add('drag'); });
+  frame.addEventListener('dragleave', () => frame.classList.remove('drag'));
+  frame.addEventListener('drop', e => { e.preventDefault(); frame.classList.remove('drag'); loadFile(e.dataTransfer.files[0]); });
+  window.addEventListener('paste', e => { const f = [...(e.clipboardData?.files || [])][0]; if (f) loadFile(f); });
+  for (const id of ['gtToggle', 'heatToggle']) $(id).addEventListener('change', () => current && draw());
+  boot();
+})();
+</script>
+</body>
+</html>

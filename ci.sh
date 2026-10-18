@@ -18,4 +18,9 @@ for v in ${versions[@]}; do
     echo "== Python $v: FAIL =="; status=1
   fi
 done
+if [ -x .venv/bin/python ]; then
+  echo "== nerveseg (PyTorch) =="
+  if PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_nerveseg.py; then echo "== nerveseg: PASS =="
+  else echo "== nerveseg: FAIL =="; status=1; fi
+fi
 exit $status

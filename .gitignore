@@ -6,3 +6,13 @@
 preds/
 __pycache__/
 .venv-ci/
+downloads/
+.venv/
+cache/
+runs/
+archive_v1/
+.gstack/
+app/samples/
+app/model.part*.bin
+results/test_pred_ensemble.npz
+analysis/contradictory_pairs.png

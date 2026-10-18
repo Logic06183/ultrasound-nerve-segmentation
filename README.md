@@ -1,3 +1,32 @@
+# Plexus Finder
+
+This fork extends the original 2016 Keras tutorial below into a validated research prototype:
+a PyTorch model, a patient-level validation protocol, and a browser app that runs the model
+on-device. Research use only. It is not a medical device.
+
+- **Results and limits:** [docs/MODEL_CARD.md](docs/MODEL_CARD.md)
+- **Product and regulatory notes:** [docs/BUSINESS.md](docs/BUSINESS.md)
+- **App:** `app/`. Serve it with `python -m http.server -d app 8000`, then open http://localhost:8000.
+
+Reproduce everything (about 2 hours on an Apple M4 Pro):
+
+```
+uv venv -p 3.13 .venv && uv pip install -p .venv/bin/python -r requirements-nerveseg.txt
+kaggle datasets download anupaankarigari/ultrasound-nerve-segmentation -p downloads --unzip
+export PYTHONPATH=.
+.venv/bin/python -c "from nerveseg.data import build_cache; build_cache()"
+.venv/bin/python analysis/profile_data.py      # dataset profile + near-duplicate label audit
+./run_cv.sh                                    # 5 patient-grouped folds, resumable
+.venv/bin/python -m nerveseg.evaluate          # tune rule out-of-fold, score locked test once
+.venv/bin/python -m nerveseg.report            # model card + figures
+.venv/bin/python -m nerveseg.export            # ONNX + app config + samples
+```
+
+The Kaggle mirror above is a copy of the competition training set. Check the competition's data
+rules before any use beyond research.
+
+---
+
 # Deep Learning Tutorial for Kaggle Ultrasound Nerve Segmentation competition, using Keras
 
 This tutorial shows how to use [Keras library](http://keras.io/) to build deep neural network for ultrasound image nerve segmentation.
