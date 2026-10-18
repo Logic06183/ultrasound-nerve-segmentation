@@ -82,6 +82,14 @@ The code targets Python 3.10+.
 `python -m pytest` runs a quick check of data loading, the U-Net shapes, Dice and the submission
 run-length encoding on synthetic images (no Kaggle data needed). Tests use the JAX backend by default.
 
+`./ci.sh` runs the same suite on Python 3.10, 3.11 and 3.13 in separate [uv](https://docs.astral.sh/uv/)
+virtualenvs, mirroring `.github/workflows/tests.yml`. To gate pushes on it locally:
+
+```
+printf '#!/usr/bin/env bash\nexec "$(git rev-parse --show-toplevel)/ci.sh"\n' > .git/hooks/pre-push
+chmod +x .git/hooks/pre-push
+```
+
 ### Prepare the data
 
 In order to extract raw images and save them to *.npy* files,
