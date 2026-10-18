@@ -52,3 +52,17 @@ Baseline: always answering "no nerve" scores a Kaggle mean Dice of 0.687 on the 
 - Single frames. No temporal smoothing or live video.
 - Kaggle leaderboard scores used a different, hidden test set and are not comparable.
 - The test set was scored twice. Version 1 used scikit-image resizing for training and scored sensitivity 0.62, specificity 0.80 and Kaggle score 0.70 on test. Version 2, reported above, switched training to the browser's area-average resize so the shipped app matches validation exactly. That switch was decided before version 2 was scored, for parity reasons, not because of its test results.
+
+## External validation: failed
+
+Pre-registered in `docs/EXTERNAL_VALIDATION_PROTOCOL.md` and run once with the frozen shipped model on 955 frames from 88 patients scanned elsewhere on a different machine.
+
+| Measure | Estimate (95% CI) |
+|---|---|
+| Sensitivity, 897 nerve frames | 0.000 (0.000–0.000) |
+| Specificity, 58 nerve-free frames | 1.000 (1.000–1.000) |
+| Predicted region touches a nerve | 0.000 (0.000–0.000) |
+
+The model found no nerve in any external frame. Median presence probability was 0.002 on nerve frames. The external images are much darker (mean grey 45 against 98) and come from a different scanner.
+
+Exploratory only, because it uses the external images themselves: matching each image's brightness and contrast to the training data does not fix it (presence AUROC 0.58). The shift is deeper than brightness. **This model works only on images like its training site's.** Multi-site training data is the first requirement for any further claim.

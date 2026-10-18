@@ -1,0 +1,7 @@
+{
+ "note": "EXPLORATORY: intensity matched to Kaggle statistics using the external images themselves; not a validation result",
+ "presence_sensitivity_at_rule_threshold": 0.0011148272017837235,
+ "specificity": 1.0,
+ "auroc_presence": 0.5807961403913429,
+ "median_presence_nerve_frames": 0.0038407742977142334
+}

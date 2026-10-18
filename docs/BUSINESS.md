@@ -40,6 +40,13 @@ openings look more realistic, roughly in order of how fast they could earn money
    anaesthesia expertise is thin. That is the strongest impact case, and it fits a Wits/South Africa
    base, but it needs the full regulated path (SAHPRA here, plus CE or FDA) and local clinical data.
 
+## Update: external validation failed
+
+On 955 frames from 88 patients at another site and scanner, the frozen model detected the nerve in
+none of them (`docs/MODEL_CARD.md`). This model is tied to one scanner. Multi-site training data is
+now the critical path for every business option above, including the teaching tool, since trainees
+will use their own machines.
+
 ## What stands between this prototype and any clinical product
 
 1. **Data rights.** The training data comes from the 2016 Kaggle competition. Its licence terms

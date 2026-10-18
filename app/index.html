@@ -202,7 +202,8 @@ td.ci { color: var(--muted); font-family: var(--font-data); font-size: 12px; }
         <h3>Known limits</h3>
         <ul id="limits">
           <li>Trained on 47 patients from one public dataset with one annotator and noisy labels.</li>
-          <li>Not tested on other scanners, sites, block approaches or children.</li>
+          <li>Failed external validation: on 955 frames from another hospital's scanner it found no nerve at all. It only works on images like its training data.</li>
+          <li>Not tested on other block approaches or children.</li>
           <li>Single frames only. No needle tracking, no live video.</li>
           <li>Never use it to guide a real needle or a clinical decision.</li>
         </ul>

@@ -86,6 +86,23 @@ def main():
               'specificity 0.80 and Kaggle score 0.70 on test. Version 2, reported above, switched training to the browser\'s '
               'area-average resize so the shipped app matches validation exactly. That switch was decided before version 2 '
               'was scored, for parity reasons, not because of its test results.', '']
+    if os.path.exists('results/external_metrics.json'):
+        e = json.load(open('results/external_metrics.json'))
+        x = json.load(open('results/external_exploratory_intensity.json'))
+        lines += ['## External validation: failed', '',
+                  f"Pre-registered in `docs/EXTERNAL_VALIDATION_PROTOCOL.md` and run once with the frozen shipped model on "
+                  f"{e['n_frames']} frames from {e['n_patients']} patients scanned elsewhere on a different machine.", '',
+                  '| Measure | Estimate (95% CI) |', '|---|---|',
+                  f"| Sensitivity, {e['n_nerve_frames']} nerve frames | {cell(e['sensitivity'])} |",
+                  f"| Specificity, {e['n_frames'] - e['n_nerve_frames']} nerve-free frames | {cell(e['specificity'])} |",
+                  f"| Predicted region touches a nerve | {cell(e['hit_rate_nerve_frames'])} |", '',
+                  f"The model found no nerve in any external frame. Median presence probability was "
+                  f"{e['presence_prob_median_nerve_frames']:.3f} on nerve frames. The external images are much darker "
+                  f"(mean grey 45 against 98) and come from a different scanner.", '',
+                  f"Exploratory only, because it uses the external images themselves: matching each image's brightness "
+                  f"and contrast to the training data does not fix it (presence AUROC {x['auroc_presence']:.2f}). "
+                  f"The shift is deeper than brightness. **This model works only on images like its training site's.** "
+                  f"Multi-site training data is the first requirement for any further claim.", '']
     open('docs/MODEL_CARD.md', 'w').write('\n'.join(lines))
     print('wrote docs/MODEL_CARD.md')
 
