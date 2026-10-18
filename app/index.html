@@ -225,8 +225,13 @@ td.ci { color: var(--muted); font-family: var(--font-data); font-size: 12px; }
   async function boot() {
     try {
       cfg = await (await fetch('config.json')).json();
-      const parts = await Promise.all(cfg.model_parts.map(p => fetch(p).then(r => {
-        if (!r.ok) throw new Error('Could not load ' + p); return r.arrayBuffer(); })));
+      // parts are raw binary, or base64 text (.b64.txt) for hosts that only serve text types
+      const parts = await Promise.all(cfg.model_parts.map(p => fetch(p).then(async r => {
+        if (!r.ok) throw new Error('Could not load ' + p);
+        if (!p.endsWith('.b64.txt')) return r.arrayBuffer();
+        const bin = atob((await r.text()).trim()), u = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        return u.buffer; })));
       const total = parts.reduce((s, b) => s + b.byteLength, 0);
       const bytes = new Uint8Array(total); let o = 0;
       for (const b of parts) { bytes.set(new Uint8Array(b), o); o += b.byteLength; }
