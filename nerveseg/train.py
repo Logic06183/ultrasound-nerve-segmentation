@@ -12,7 +12,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from nerveseg.data import load_cache, patient_split
+from nerveseg.sites import load_all
 from nerveseg.model import PIX_MEAN, PIX_STD, build_model
 
 DUP_THRESHOLD = 0.1  # thumbnail distance below which two frames count as the same view
@@ -79,6 +79,7 @@ def main():
     ap.add_argument('--lr', type=float, default=1e-3)
     ap.add_argument('--no-clean', action='store_true', help='keep contradictory negatives in training')
     ap.add_argument('--max-batches', type=int, default=0, help='debug: cap batches per epoch')
+    ap.add_argument('--sites', default='AB', help='A = Kaggle only, AB = both sites')
     ap.add_argument('--out', default='runs/default')
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -86,16 +87,16 @@ def main():
     np.random.seed(0)
     dev = 'mps' if torch.backends.mps.is_available() else 'cpu'
 
-    imgs, masks, meta, area = load_cache()
-    fold = np.array([patient_split(meta[:, 0])[int(s)] for s in meta[:, 0]])
+    d = load_all(a.sites)
+    imgs, masks, area, fold, subj = d['imgs'], d['masks'], d['area'], d['fold'], d['subj']
     pos = area > 0
     tr = (fold >= 0) & (fold != a.val_fold)
     va = fold == a.val_fold
     dropped = np.array([], int) if a.no_clean else contradictory_negatives(pos, np.load('cache/dup_pairs.npy'), tr)
     tr_idx = np.setdiff1d(np.where(tr)[0], dropped)
     va_idx = np.where(va)[0]
-    print(f'train {len(tr_idx)} imgs ({len(dropped)} contradictory negatives dropped), val {len(va_idx)} imgs, '
-          f'val patients {sorted(set(meta[va_idx, 0].tolist()))}', flush=True)
+    print(f'sites {a.sites}: train {len(tr_idx)} imgs ({len(dropped)} contradictory negatives dropped), '
+          f'val {len(va_idx)} imgs from {len(set(subj[va_idx].tolist()))} patients', flush=True)
 
     model = build_model(a.encoder).to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)

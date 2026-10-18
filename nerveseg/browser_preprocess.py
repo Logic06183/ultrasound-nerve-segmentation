@@ -10,7 +10,7 @@ def area_downscale(g, H, W):
         s = n_in / n_out
         for o in range(n_out):
             a, b = o * s, (o + 1) * s
-            for i in range(int(np.floor(a)), int(np.ceil(b))):
+            for i in range(int(np.floor(a)), min(int(np.ceil(b)), n_in)):  # clamp: float edge can overshoot
                 m[o, i] = min(i + 1, b) - max(i, a)
         return m / m.sum(1, keepdims=True)
     return weights(h, H) @ g.astype(np.float64) @ weights(w, W).T

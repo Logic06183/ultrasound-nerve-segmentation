@@ -17,6 +17,7 @@ from skimage.io import imread
 from sklearn.metrics import roc_auc_score
 
 from nerveseg.data import ORIG_H, ORIG_W, list_pairs, load_cache, patient_split
+from nerveseg.sites import load_all, native_truth
 from nerveseg.model import build_model
 from nerveseg.train import DUP_THRESHOLD, predict
 
@@ -107,6 +108,38 @@ def full_res_masks(idx, meta):
     return np.stack([imread(lookup[(int(meta[i, 0]), int(meta[i, 1]))]) > 0 for i in idx])
 
 
+def frame_stats(prob_small, cls, refs):
+    """Rule-independent per-frame quantities at each frame's native resolution.
+
+    For every frame: area of the largest predicted region, Dice and centroid error if that region
+    is kept, whether the truth is non-empty, and the area scale relative to 420x580.
+    """
+    n = len(refs)
+    out = {k: np.zeros(n) for k in ('area', 'dice_kept', 'cerr_kept', 'scale')}
+    out['true_pos'] = np.zeros(n, bool)
+    for i, ref in enumerate(refs):
+        truth = native_truth(ref)
+        h, w = truth.shape
+        t = torch.from_numpy(prob_small[i].astype(np.float32))[None, None]
+        prob = F.interpolate(t, (h, w), mode='bilinear', align_corners=False)[0, 0].numpy()
+        comp, area = largest_components(prob[None])
+        comp, area = comp[0], area[0]
+        ts = truth.sum()
+        out['area'][i], out['scale'][i], out['true_pos'][i] = area, h * w / (ORIG_H * ORIG_W), ts > 0
+        out['dice_kept'][i] = 2 * (comp & truth).sum() / max(comp.sum() + ts, 1) if area else (1.0 if ts == 0 else 0.0)
+        out['cerr_kept'][i] = (np.linalg.norm(np.array(ndimage.center_of_mass(comp)) - ndimage.center_of_mass(truth))
+                               if area and ts else np.nan)
+    out['cls'] = np.asarray(cls, float)
+    return out
+
+
+def apply_rule_stats(st, t_cls, min_area):
+    keep = (st['cls'] >= t_cls) & (st['area'] >= min_area * st['scale']) & (st['area'] > 0)
+    dice = np.where(keep, st['dice_kept'], np.where(st['true_pos'], 0.0, 1.0))
+    cerr = np.where(keep & st['true_pos'], st['cerr_kept'], np.nan)
+    return dict(dice=dice, pred_pos=keep, true_pos=st['true_pos'], cerr=cerr)
+
+
 def contradictory_set(pos, keep):
     pairs = np.load('cache/dup_pairs.npy')
     sel = pairs[pairs[:, 2] < DUP_THRESHOLD]
@@ -117,69 +150,60 @@ def contradictory_set(pos, keep):
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    imgs, masks, meta, area = load_cache()
-    subj = meta[:, 0]
-    fold = np.array([patient_split(subj)[int(s)] for s in subj])
-    pos = area > 0
+    d = load_all('AB')
+    subj, site, fold, refs = d['subj'], d['site'], d['fold'], d['ref']
+    pos = d['area'] > 0
 
-    # 1. out-of-fold predictions on development patients -> tune decision rule
+    # 1. pooled out-of-fold predictions from both sites -> tune the decision rule
     oof = [np.load(f) for f in sorted(glob.glob('runs/fold*/val_pred.npz'))]
     assert len(oof) == 5, f'expected 5 folds, found {len(oof)}'
     d_idx = np.concatenate([o['idx'] for o in oof])
-    d_prob = upsample(np.concatenate([o['mask'] for o in oof]))
-    d_cls = np.concatenate([o['cls'] for o in oof])
-    d_true = full_res_masks(d_idx, meta)
-    d_comp, d_area = largest_components(d_prob)
+    dev = frame_stats(np.concatenate([o['mask'] for o in oof]), np.concatenate([o['cls'] for o in oof]),
+                      [refs[i] for i in d_idx])
     grid = []
     for t in np.round(np.arange(0.3, 0.81, 0.05), 2):
         for a in (0, 1000, 2000, 3000, 4000, 5000):
-            r = per_image(apply_rule(d_comp, d_area, d_cls, t, a), d_true)
-            grid.append((float(r['dice'].mean()), float(t), int(a)))
+            grid.append((float(apply_rule_stats(dev, t, a)['dice'].mean()), float(t), int(a)))
     best = max(grid)
     t_cls, min_area = best[1], best[2]
-    rule = {'t_cls': t_cls, 'min_area_px_full_res': min_area, 'oof_kaggle_mean_dice': best[0]}
-    oof_r = per_image(apply_rule(d_comp, d_area, d_cls, t_cls, min_area), d_true)
-    dev = bootstrap(oof_r, d_cls, subj[d_idx])
-    del d_prob
+    res = {'decision_rule': {'t_cls': t_cls, 'min_area_px_full_res': min_area, 'oof_kaggle_mean_dice': best[0]}}
+    for s_id, s_name in ((0, 'A'), (1, 'B')):
+        k = site[d_idx] == s_id
+        r = apply_rule_stats({kk: v[k] for kk, v in dev.items()}, t_cls, min_area)
+        res[f'development_oof_site{s_name}'] = bootstrap(r, dev['cls'][k], subj[d_idx][k])
 
-    # 2. locked test patients: 5-fold ensemble and the single fold-0 model
+    # 2. locked test patients of each site: shipped fold-0 model and the 5-fold ensemble
     t_idx = np.where(fold == -1)[0]
-    t_true = full_res_masks(t_idx, meta)
     device = 'mps' if torch.backends.mps.is_available() else 'cpu'
     preds = []
     for f in range(5):
         net = build_model(weights=None).to(device)
         net.load_state_dict(torch.load(f'runs/fold{f}/best.pt', map_location=device))
-        preds.append(predict(net, imgs[t_idx], device))
-    res = {'test_patients': sorted(set(subj[t_idx].tolist())), 'n_test_images': int(len(t_idx)),
-           'test_positive_rate': float(pos[t_idx].mean()), 'decision_rule': rule, 'development_oof': dev}
-    contra = contradictory_set(pos, fold == -1)
-    keep = np.array([i not in contra for i in t_idx])
-    res['n_test_images_in_contradictory_pairs'] = int((~keep).sum())
-    for name, (mp, cp) in {'ensemble5': (np.mean([p[0].astype(np.float32) for p in preds], 0),
-                                          np.mean([p[1] for p in preds], 0)),
-                           'single_fold0': (preds[0][0], preds[0][1])}.items():
-        prob = upsample(mp)
-        r = per_image(postprocess(prob, cp, t_cls, min_area), t_true)
-        res[f'test_{name}'] = bootstrap(r, cp, subj[t_idx])
-        res[f'test_{name}_consistent_labels_only'] = bootstrap({k: v[keep] for k, v in r.items()}, cp[keep],
-                                                               subj[t_idx][keep])
-        per_pat = {}
-        for s in np.unique(subj[t_idx]):
-            k = subj[t_idx] == s
-            per_pat[int(s)] = {'n': int(k.sum()), 'positive_rate': float(r['true_pos'][k].mean()),
-                               'kaggle_mean_dice': float(r['dice'][k].mean()),
-                               'sensitivity': float((r['pred_pos'] & r['true_pos'])[k].sum() / max(r['true_pos'][k].sum(), 1)),
-                               'specificity': float((~r['pred_pos'] & ~r['true_pos'])[k].sum() / max((~r['true_pos'][k]).sum(), 1))}
-        res[f'test_{name}_per_patient'] = per_pat
+        preds.append(predict(net, d['imgs'][t_idx], device))
+    variants = {'single_fold0': (preds[0][0], preds[0][1]),
+                'ensemble5': (np.mean([p[0].astype(np.float32) for p in preds], 0), np.mean([p[1] for p in preds], 0))}
+    contra = contradictory_set(pos[site == 0], (fold == -1)[site == 0])
+    for name, (mp, cp) in variants.items():
+        st = frame_stats(mp, cp, [refs[i] for i in t_idx])
+        r_all = apply_rule_stats(st, t_cls, min_area)
+        for s_id, s_name in ((0, 'A'), (1, 'B')):
+            k = site[t_idx] == s_id
+            r = {kk: v[k] for kk, v in r_all.items()}
+            res[f'test_{name}_site{s_name}'] = bootstrap(r, cp[k], subj[t_idx][k])
+            res[f'test_site{s_name}_patients'] = sorted(set(int(x) for x in subj[t_idx][k]))
+            res[f'test_site{s_name}_n_images'] = int(k.sum())
+            res[f'test_site{s_name}_positive_rate'] = float(pos[t_idx][k].mean())
+            res[f'test_site{s_name}_baseline_always_empty'] = float((~r['true_pos']).mean())
+            if s_id == 0:
+                keep = np.array([i not in contra for i in t_idx[k]])
+                res[f'test_{name}_siteA_consistent_labels_only'] = bootstrap(
+                    {kk: v[keep] for kk, v in r.items()}, cp[k][keep], subj[t_idx][k][keep])
+                res['n_siteA_test_images_in_contradictory_pairs'] = int((~keep).sum())
         if name == 'ensemble5':
             np.savez_compressed(os.path.join(OUT, 'test_pred_ensemble.npz'), idx=t_idx, mask=mp, cls=cp,
-                                dice=r['dice'])
-    # trivial baseline: always predict "no nerve"
-    empty = per_image(np.zeros_like(t_true), t_true)
-    res['test_baseline_always_empty_kaggle_mean_dice'] = float(empty['dice'].mean())
+                                dice=r_all['dice'], site=site[t_idx])
     json.dump(res, open(os.path.join(OUT, 'metrics.json'), 'w'), indent=1)
-    print(json.dumps({k: v for k, v in res.items() if 'per_patient' not in k}, indent=1))
+    print(json.dumps(res, indent=1))
 
 
 if __name__ == '__main__':

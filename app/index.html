@@ -195,14 +195,14 @@ td.ci { color: var(--muted); font-family: var(--font-data); font-size: 12px; }
         <ul>
           <li>Highlight the brachial plexus on a single interscalene ultrasound frame.</li>
           <li>Teaching sonoanatomy and benchmarking annotation.</li>
-          <li>Frames similar to the training data: 580×420 px greyscale, same scanner family.</li>
+          <li>Frames like the two training sites': interscalene view, the plexus in cross-section.</li>
         </ul>
       </div>
       <div>
         <h3>Known limits</h3>
         <ul id="limits">
-          <li>Trained on 47 patients from one public dataset with one annotator and noisy labels.</li>
-          <li>Failed external validation: on 955 frames from another hospital's scanner it found no nerve at all. It only works on images like its training data.</li>
+          <li>135 patients from two public datasets, one annotator each, noisy labels at site A.</li>
+          <li>Trained and tested at two hospitals only. An earlier single-site version found no nerve at all on the second hospital's scanner, so expect failure on a third machine until it is tested there.</li>
           <li>Not tested on other block approaches or children.</li>
           <li>Single frames only. No needle tracking, no live video.</li>
           <li>Never use it to guide a real needle or a clinical decision.</li>
@@ -254,7 +254,7 @@ td.ci { color: var(--muted); font-family: var(--font-data); font-size: 12px; }
     for (const s of cfg.samples) {
       const b = document.createElement('button');
       b.className = 'thumb'; b.type = 'button'; b.setAttribute('aria-pressed', 'false'); b.dataset.id = s.id;
-      b.innerHTML = `<img alt="" src="samples/${s.id}.png" loading="lazy"><b>Patient ${s.patient}</b><span>frame ${s.frame} · ${s.labelled_nerve ? 'nerve labelled' : 'no nerve labelled'}</span>`;
+      b.innerHTML = `<img alt="" src="samples/${s.id}.png" loading="lazy"><b>${s.site} · patient ${s.patient}</b><span>frame ${s.frame} · ${s.labelled_nerve ? 'nerve labelled' : 'no nerve labelled'}</span>`;
       b.addEventListener('click', () => loadSample(s));
       box.appendChild(b);
     }
@@ -295,12 +295,13 @@ td.ci { color: var(--muted); font-family: var(--font-data); font-size: 12px; }
   function downscale(g, w, h, W, H) {
     const out = new Float32Array(W * H), sx = w / W, sy = h / H;
     for (let Y = 0; Y < H; Y++) {
-      const y0 = Y * sy, y1 = y0 + sy;
+      // edges as (index + 1) * scale, clamped to the image, exactly as nerveseg/browser_preprocess.py
+      const y0 = Y * sy, y1 = (Y + 1) * sy, yEnd = Math.min(Math.ceil(y1), h);
       for (let X = 0; X < W; X++) {
-        const x0 = X * sx, x1 = x0 + sx; let acc = 0, wt = 0;
-        for (let y = Math.floor(y0); y < Math.ceil(y1); y++) {
+        const x0 = X * sx, x1 = (X + 1) * sx, xEnd = Math.min(Math.ceil(x1), w); let acc = 0, wt = 0;
+        for (let y = Math.floor(y0); y < yEnd; y++) {
           const fy = Math.min(y + 1, y1) - Math.max(y, y0);
-          for (let x = Math.floor(x0); x < Math.ceil(x1); x++) {
+          for (let x = Math.floor(x0); x < xEnd; x++) {
             const f = fy * (Math.min(x + 1, x1) - Math.max(x, x0)); acc += f * g[y * w + x]; wt += f;
           }
         }
@@ -388,7 +389,7 @@ td.ci { color: var(--muted); font-family: var(--font-data); font-size: 12px; }
     }
     octx.putImageData(img, 0, 0);
     const s = current.sample;
-    $('cornerL').textContent = s ? `PATIENT ${s.patient} · FRAME ${s.frame}` : (current.name || 'Your image');
+    $('cornerL').textContent = s ? `${s.site.toUpperCase()} · PATIENT ${s.patient} · FRAME ${s.frame}` : (current.name || 'Your image');
     $('cornerR').textContent = `${w}×${h} px`;
   }
 
@@ -417,10 +418,12 @@ td.ci { color: var(--muted); font-family: var(--font-data); font-size: 12px; }
   }
 
   function renderEvidence() {
-    const v = cfg.validation.test_single_fold0, vc = cfg.validation.test_single_fold0_consistent_labels_only;
-    $('evidenceIntro').textContent = `This exact model was scored once on ${cfg.n_test_images.toLocaleString()} frames from ` +
-      `${cfg.test_patients.length} patients held out from all training and tuning. Ranges are 95% confidence intervals from ` +
-      `resampling patients. The right-hand columns drop frames whose label contradicts a near-identical frame from the same patient.`;
+    const A = cfg.validation.test_single_fold0_siteA, B = cfg.validation.test_single_fold0_siteB;
+    const sa = cfg.sites.A, sb = cfg.sites.B;
+    $('evidenceIntro').textContent = `This exact model was scored on patients held out from all training and tuning at two ` +
+      `hospitals: ${sa.patients} patients (${sa.images.toLocaleString()} frames) at site A, the public Kaggle set, and ` +
+      `${sb.patients} patients (${sb.images.toLocaleString()} frames) at site B, a different hospital and scanner. ` +
+      `Ranges are 95% confidence intervals from resampling patients.`;
     const rows = [
       ['Sensitivity: plexus present, model finds it', 'sensitivity'],
       ['Specificity: plexus absent, model stays quiet', 'specificity'],
@@ -430,9 +433,9 @@ td.ci { color: var(--muted); font-family: var(--font-data); font-size: 12px; }
       ['Kaggle score (mean Dice, all frames)', 'kaggle_mean_dice'],
     ];
     const f = m => m ? m.estimate.toFixed(2) : '–', ci = m => m ? `${m.ci95[0].toFixed(2)}–${m.ci95[1].toFixed(2)}` : '';
-    $('metricsTable').innerHTML = '<thead><tr><th>Measure</th><th>All test frames</th><th>95% CI</th><th>Consistent labels</th><th>95% CI</th></tr></thead><tbody>' +
-      rows.map(([n, k]) => `<tr><td>${n}</td><td>${f(v[k])}</td><td class="ci">${ci(v[k])}</td><td>${f(vc[k])}</td><td class="ci">${ci(vc[k])}</td></tr>`).join('') +
-      `<tr><td>Kaggle score of always answering "no nerve"</td><td>${cfg.baseline_always_empty.toFixed(2)}</td><td class="ci"></td><td></td><td></td></tr></tbody>`;
+    $('metricsTable').innerHTML = '<thead><tr><th>Measure</th><th>Site A</th><th>95% CI</th><th>Site B</th><th>95% CI</th></tr></thead><tbody>' +
+      rows.map(([n, k]) => `<tr><td>${n}</td><td>${f(A[k])}</td><td class="ci">${ci(A[k])}</td><td>${f(B[k])}</td><td class="ci">${ci(B[k])}</td></tr>`).join('') +
+      `<tr><td>Kaggle score of always answering "no nerve"</td><td>${sa.baseline_always_empty.toFixed(2)}</td><td class="ci"></td><td>${sb.baseline_always_empty.toFixed(2)}</td><td class="ci"></td></tr></tbody>`;
   }
 
   const frame = $('frame');
